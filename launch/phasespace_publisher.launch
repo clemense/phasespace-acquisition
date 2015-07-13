@@ -1,0 +1,11 @@
+<launch>
+  <env name="ROSCONSOLE_CONFIG_FILE" value="$(find phasespace_acquisition)/config/rosconsole_debug_enabled.conf"/>
+
+  <!-- default value to choose whether or not to enable the PhaseSpace Publisher verbose mode -->
+  <arg name="phasespace_pub_verbose_mode" default="false"/>
+
+  <node pkg="phasespace_acquisition" type="phasespace_talker" name="phasespace_talker" output="screen" cwd="ROS_HOME">
+    <param name="verbose_mode" type="bool" value="$(arg phasespace_pub_verbose_mode)" />
+    <param name="server_ip" type="str" value="192.168.1.230" />
+  </node>
+</launch>
