@@ -1,83 +1,51 @@
-cmake_minimum_required(VERSION 2.8.3)
-project(phasespace_acquisition)
-set(CMAKE_CXX_FLAGS "-std=c++11")
+cmake_minimum_required(VERSION 2.4.6)
 
-find_package(catkin REQUIRED
-  COMPONENTS
-  roscpp
-  std_msgs
-  geometry_msgs
-  message_generation
-)
+include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
-add_message_files(
-  DIRECTORY msg
-  FILES
-    PhaseSpaceMarker.msg
-    PhaseSpaceMarkerArray.msg
-)
+# Set the build type.  Options are:
+#  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
+#  Debug          : w/ debug symbols, w/o optimization
+#  Release        : w/o debug symbols, w/ optimization
+#  RelWithDebInfo : w/ debug symbols, w/ optimization
+#  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
+#set(ROS_BUILD_TYPE RelWithDebInfo)
 
-generate_messages(
-  DEPENDENCIES
-    std_msgs
-    geometry_msgs
-)
+rosbuild_init()
 
-include_directories(include
-  ${catkin_INCLUDE_DIRS}
-)
+#set the default path for built executables to the "bin" directory
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+#set the default path for built libraries to the "lib" directory
+set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
-link_directories(libs)
+#uncomment if you have defined messages
+rosbuild_genmsg()
+#uncomment if you have defined services
+#rosbuild_gensrv()
 
-set(LIB_PHASESPACE phasespace_core)
-
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES ${LIB_PHASESPACE}
-  CATKIN_DEPENDS
-    roscpp
-    std_msgs
-    geometry_msgs
-    message_runtime
-)
-
-set(BIN_TALKER phasespace_talker)
-set(BIN_LISTENER phasespace_listener)
-
-# Talker
-add_executable(${BIN_TALKER}
+#common commands for building c++ executables and libraries
+#rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
+#target_link_libraries(${PROJECT_NAME} another_library)
+#rosbuild_add_boost_directories()
+#rosbuild_link_boost(${PROJECT_NAME} thread)
+rosbuild_add_executable(phasespace_talker
   src/phasespace_talker.cpp
   src/phasespace_core.cpp
 )
-target_link_libraries(${BIN_TALKER} 
-  ${catkin_LIBRARIES}
-  owlsock
-)
-add_dependencies(${BIN_TALKER} 
-  ${catkin_EXPORTED_TARGETS}
+
+target_link_libraries(phasespace_talker 
+  ${PROJECT_SOURCE_DIR}/libs/libowlsock.so
 )
 
-# Listener
-add_executable(${BIN_LISTENER}
+rosbuild_add_compile_flags(phasespace_talker "-std=c++0x")
+
+rosbuild_add_executable(phasespace_listener
   src/phasespace_listener.cpp
   src/phasespace_core.cpp
 )
-target_link_libraries(${BIN_LISTENER}
-  ${catkin_LIBRARIES}
-  owlsock
-)
-add_dependencies(${BIN_LISTENER} 
-  ${catkin_EXPORTED_TARGETS}
+
+rosbuild_add_compile_flags(phasespace_listener "-std=c++0x")
+
+target_link_libraries(phasespace_listener 
+  /home/clemens/clemens_sandbox/phasespace_acquisition/libs/libowlsock.so
 )
 
-# Exported library
-add_library(${LIB_PHASESPACE}
-  src/phasespace_core.cpp
-)
-target_link_libraries(${LIB_PHASESPACE}
-  ${catkin_LIBRARIES}
-  owlsock
-)
-add_dependencies(${LIB_PHASESPACE} 
-  ${catkin_EXPORTED_TARGETS}
-)

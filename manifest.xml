@@ -1,0 +1,18 @@
+<package>
+  <description brief="phasespace_acquisition">
+
+    PhaseSpace Motion Capture system data retriever (talker + listener nodes). Check the readme for details.
+
+  </description>
+  <author>Alessandro Tondo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/</url>
+
+  <depend package="roscpp"/>
+  <depend package="std_msgs"/>
+  <depend package="geometry_msgs"/>
+
+</package>
+
+
