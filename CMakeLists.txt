@@ -43,9 +43,19 @@ rosbuild_add_executable(phasespace_listener
   src/phasespace_core.cpp
 )
 
+target_link_libraries(phasespace_listener 
+  ${PROJECT_SOURCE_DIR}/libs/libowlsock.so
+)
+
 rosbuild_add_compile_flags(phasespace_listener "-std=c++0x")
 
-target_link_libraries(phasespace_listener 
-  /home/clemens/clemens_sandbox/phasespace_acquisition/libs/libowlsock.so
+rosbuild_add_executable(phasespace_rviz_publisher
+  src/phasespace_rviz_publisher.cpp
 )
+
+target_link_libraries(phasespace_rviz_publisher 
+  ${PROJECT_SOURCE_DIR}/libs/libowlsock.so
+)
+
+rosbuild_add_compile_flags(phasespace_rviz_publisher "-std=c++0x")
 
