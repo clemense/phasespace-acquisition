@@ -31,6 +31,9 @@ PhasespaceCore::PhasespaceCore(std::string mode) {
     private_node_handle_->param("init_flags", init_flags_, DEFAULT_INIT_FLAGS);
     private_node_handle_->param("init_camera_count", init_camera_count_, 4);
 
+    private_node_handle_->param("acquire_camera_poses", acquire_camera_poses_, false);
+    acquire_rigid_bodies_ = private_node_handle_->hasParam("rigid_body_files");
+
     // initializes the communication with PhaseSpace server
     tracker_ = 0;
     markers_ = new OWLMarker[init_marker_count_];
@@ -83,12 +86,10 @@ PhasespaceCore::PhasespaceCore(std::string mode) {
   // statistics variables initialization
   markers_count_ = new std::vector<int> (init_marker_count_, 0);
   partial_markers_count_ = new std::vector<int> (init_marker_count_, 0);
-  //cameras_count_ = new std::vector<int> (init_camera_count_, 0);
   num_data_retrieved_ = 0;
   partial_num_data_retrieved_ = 0;
   num_log_files_ = 0;
   start_time_ = ros::Time::now();
-  acquire_camera_poses_ = false;
 }
 
 PhasespaceCore::~PhasespaceCore() {
@@ -237,8 +238,22 @@ void PhasespaceCore::initializeCommunication() {
     throw excp_;
   }
   
-  //initializeRigidBodies({"/home/clemens/clemens_sandbox/phasespace_acquisition/rigid_bodies/softhand.rb"});
-  initializeRigidBodies({"/home/clemens/clemens_sandbox/phasespace_acquisition/rigid_bodies/testobject.rb"});
+  if (acquire_rigid_bodies_) {
+    XmlRpc::XmlRpcValue list_of_files;
+    if (private_node_handle_->getParam("rigid_body_files", list_of_files)) {
+        ROS_ASSERT(list_of_files.getType() == XmlRpc::XmlRpcValue::TypeArray);
+        
+        std::vector<std::string> filenames;
+        
+        for (int32_t i = 0; i < list_of_files.size(); ++i) {
+            ROS_ASSERT(list_of_files[i].getType() == XmlRpc::XmlRpcValue::TypeString);
+            filenames.push_back(static_cast<std::string>(list_of_files[i]));
+        }
+        
+        initializeRigidBodies(filenames);
+        //initializeRigidBodies({"/home/clemens/clemens_sandbox/phasespace_acquisition/rigid_bodies/testobject.rb"});
+    }
+  }
   
   // enables the tracker (it has to be disabled when the markers have to be added)
   owlTracker(0, OWL_ENABLE);
@@ -348,7 +363,10 @@ void PhasespaceCore::publishMessage(ros::Time current_time, int num_visible_mark
 
 void PhasespaceCore::readAndPublish() {
   // get the rigid body
-  int num_rigids = owlGetRigids(&rigid_, 1);
+  int num_rigids = 0;
+  if (acquire_rigid_bodies_) {
+    num_rigids = owlGetRigids(&rigid_, 1);
+  }
   
   // queries the server for new markers data and returns the number of current active markers (0 means old data)
   int num_markers = owlGetMarkers(markers_, init_marker_count_);

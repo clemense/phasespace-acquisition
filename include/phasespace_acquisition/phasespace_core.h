@@ -189,7 +189,7 @@ class PhasespaceCore {
   PhasespaceCoreException excp_;
 
   bool acquire_camera_poses_;
-
+  bool acquire_rigid_bodies_;
 
   /*  Initializes the communication with the PhaseSpace server throught its API functions. It creates the point traker
    *  and all the active marker structures, based on the settings provided as ROS param (retrieved in the constructor)
