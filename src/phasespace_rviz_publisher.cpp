@@ -98,21 +98,11 @@ void PhaseSpaceViz::publishRVIZMarkers(const phasespace_acquisition::PhaseSpaceM
         rviz_marker_.id = array.data[i].id;
         rviz_marker_.pose.position = array.data[i].point;
 	
-	// it's probably in mm
-        rviz_marker_.pose.position.x /= 1000.0;
-        rviz_marker_.pose.position.y /= 1000.0;
-        rviz_marker_.pose.position.z /= 1000.0;
-
         // fill the led id
         id_marker_.header = array.header;
         id_marker_.text = std::to_string(array.data[i].id);
         id_marker_.id = array.data[i].id;
         id_marker_.pose.position = array.data[i].point;
-
-	// it's probably in mm
-        id_marker_.pose.position.x /= 1000.0;
-        id_marker_.pose.position.y /= 1000.0;
-        id_marker_.pose.position.z /= 1000.0;
 
         rviz_markers_.markers.push_back(rviz_marker_);
         rviz_markers_.markers.push_back(id_marker_);

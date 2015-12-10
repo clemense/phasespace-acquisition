@@ -6,6 +6,6 @@
 
   <node pkg="phasespace_acquisition" type="phasespace_talker" name="phasespace_talker" output="screen" cwd="ROS_HOME">
     <param name="verbose_mode" type="bool" value="$(arg phasespace_pub_verbose_mode)" />
-    <param name="server_ip" type="str" value="192.168.1.230" />
+    <param name="server_ip" type="str" value="169.255.148.9" />
   </node>
 </launch>

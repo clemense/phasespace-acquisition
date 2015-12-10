@@ -13,6 +13,8 @@
 
 #include "phasespace_acquisition/phasespace_core.h"
 
+#include <sstream>
+
 PhasespaceCore::PhasespaceCore(std::string mode) {
   // handles server private parameters (private names are protected from accidental name collisions)
   private_node_handle_ = new ros::NodeHandle("~");
@@ -27,10 +29,12 @@ PhasespaceCore::PhasespaceCore(std::string mode) {
     private_node_handle_->param("server_ip", server_ip_, std::string(DEFAULT_SERVER_IP));
     private_node_handle_->param("init_marker_count", init_marker_count_, DEFAULT_MARKER_COUNT);
     private_node_handle_->param("init_flags", init_flags_, DEFAULT_INIT_FLAGS);
+    private_node_handle_->param("init_camera_count", init_camera_count_, 4);
 
     // initializes the communication with PhaseSpace server
     tracker_ = 0;
     markers_ = new OWLMarker[init_marker_count_];
+    cameras_ = new OWLCamera[init_camera_count_];
     initializeCommunication();
 
     publisher_ = node_handle_.advertise<phasespace_acquisition::PhaseSpaceMarkerArray>(topic_name_, topic_queue_length_);
@@ -79,10 +83,12 @@ PhasespaceCore::PhasespaceCore(std::string mode) {
   // statistics variables initialization
   markers_count_ = new std::vector<int> (init_marker_count_, 0);
   partial_markers_count_ = new std::vector<int> (init_marker_count_, 0);
+  //cameras_count_ = new std::vector<int> (init_camera_count_, 0);
   num_data_retrieved_ = 0;
   partial_num_data_retrieved_ = 0;
   num_log_files_ = 0;
   start_time_ = ros::Time::now();
+  acquire_camera_poses_ = false;
 }
 
 PhasespaceCore::~PhasespaceCore() {
@@ -142,6 +148,7 @@ PhasespaceCore::~PhasespaceCore() {
   delete private_node_handle_;
   delete markers_;
   delete markers_count_;
+  delete cameras_;
 }
 
 std::map<std::string, std::ofstream*> PhasespaceCore::getLogFilesMap() {
@@ -150,6 +157,54 @@ std::map<std::string, std::ofstream*> PhasespaceCore::getLogFilesMap() {
 
 bool PhasespaceCore::getStatus() {
   return node_handle_.ok();
+}
+
+void PhasespaceCore::initializeRigidBodies(const std::vector<std::string>& filenames) {
+  tracker_++;
+  for (std::vector<std::string>::const_iterator it = filenames.begin(); it != filenames.end(); ++it) {
+    std::ifstream file(*it);
+
+    if (!file.is_open()) {
+      ROS_ERROR_STREAM("[PhaseSpace] Could not open file: " << *it);
+      throw excp_;
+    }
+
+    // set rigid body tracker
+    owlTrackeri(tracker_, OWL_CREATE, OWL_RIGID_TRACKER);
+
+    std::string line;
+    // set markers for rigid body
+    int i = 0;
+    while (std::getline(file, line)) {
+      // format is: "led_id, x y z"
+      std::cout << line << std::endl;
+      std::size_t comma = line.find_first_of(",");
+      if (comma == std::string::npos) {
+        ROS_FATAL_STREAM("Problem parsing file " << *it);
+        ROS_FATAL_STREAM("Line '" << line << "' does NOT contain comma separator.");
+        throw excp_;
+      }
+      int marker_id = boost::lexical_cast<int>(line.substr(0, comma));
+      float position[3];
+      std::stringstream ss(line.substr(comma+1));
+      ss >> position[0] >> position[1] >> position[2];
+
+      owlMarkeri(MARKER(tracker_, marker_id), OWL_SET_LED, marker_id);
+      owlMarkerfv(MARKER(tracker_, marker_id), OWL_SET_POSITION, position);
+
+      std::cout << "Marker " << marker_id << " with " << position[0] << " " << position[1] << " " << position[2] << std::endl;
+      i++;
+    }
+    
+    ROS_INFO_STREAM("[PhaseSpace] Enabling rigid tracker for: " << *it);
+    owlTracker(tracker_, OWL_ENABLE);
+    
+    // flush requests and check for errors
+    if(!owlGetStatus()) {
+      ROS_FATAL_STREAM("[PhaseSpace] Error in rigid tracker setup: " << owlGetError());
+      return;
+    }
+  }
 }
 
 void PhasespaceCore::initializeCommunication() {
@@ -161,7 +216,7 @@ void PhasespaceCore::initializeCommunication() {
     ROS_FATAL_STREAM("[PhaseSpace] Can't initialize the communication with OWL server: " << owlGetError());
     throw excp_;
   }
-
+  
   // initializes a point tracker:
   //  - OWL_CREATE: tells the system to create a tracker
   //  - OWL_POINT_TRACKER: specifies the creation of a point tracker
@@ -171,18 +226,26 @@ void PhasespaceCore::initializeCommunication() {
   //  - MARKER Macro: builds a marker id out of a tracker id and marker index
   //  - OWL_SET_LED: the following 'i' is an integer representing the LED ID of the marker
   for (int i=0; i<init_marker_count_; i++) {
+    //if (i != 7 && i != 10 && i != 11)
     owlMarkeri(MARKER(tracker_, i), OWL_SET_LED, i);
   }
 
-  // enables the tracker (it has to be disabled when the markers have to be added)
-  owlTracker(tracker_, OWL_ENABLE);
-
+  
   // checking the status will block until all commands are processed and any errors are sent to the client
   if (!owlGetStatus()) {
     ROS_FATAL_STREAM("[PhaseSpace] Initialization generic error: " << owlGetError());
     throw excp_;
   }
+  
+  //initializeRigidBodies({"/home/clemens/clemens_sandbox/phasespace_acquisition/rigid_bodies/softhand.rb"});
+  initializeRigidBodies({"/home/clemens/clemens_sandbox/phasespace_acquisition/rigid_bodies/testobject.rb"});
+  
+  // enables the tracker (it has to be disabled when the markers have to be added)
+  owlTracker(0, OWL_ENABLE);
 
+  // report all values in meters rather than millimeters
+  owlScale(0.001);
+  
   // sets frequency with default maximum value (OWL_MAX_FREQUENCY = 480 Hz):
   //  - OWL_FREQUENCY: specifies the rate at which the server streams data
   owlSetFloat(OWL_FREQUENCY, OWL_MAX_FREQUENCY);
@@ -266,9 +329,8 @@ void PhasespaceCore::publishMessage(ros::Time current_time, int num_visible_mark
   
   for (int i=0; i<num_markers; i++) {
     if(markers_[i].cond > 0) {
-      marker.id = i;
+      marker.id = INDEX(markers_[i].id);
       marker.cond = markers_[i].cond;
-      // coordinates are expressed in millimeters
       marker.point.x = markers_[i].x;
       marker.point.y = markers_[i].y;
       marker.point.z = markers_[i].z;
@@ -285,6 +347,9 @@ void PhasespaceCore::publishMessage(ros::Time current_time, int num_visible_mark
 }
 
 void PhasespaceCore::readAndPublish() {
+  // get the rigid body
+  int num_rigids = owlGetRigids(&rigid_, 1);
+  
   // queries the server for new markers data and returns the number of current active markers (0 means old data)
   int num_markers = owlGetMarkers(markers_, init_marker_count_);
   if (owlGetError() != OWL_NO_ERROR) {
@@ -314,6 +379,35 @@ void PhasespaceCore::readAndPublish() {
   }
 
   publishMessage(current_time, num_visible_markers, num_markers);
+  
+  if (num_rigids > 0) {
+    if (rigid_.cond > 0) {
+      std::cout << num_rigids << " " << rigid_.cond << std::endl;
+      //tf::Transform transform(tf::Quaternion(rigid_[i].pose[4], rigid_[i].pose[5], rigid_[i].pose[6], rigid_[i].pose[3]), tf::Vector3(rigid_[i].pose[0], rigid_[i].pose[1], rigid_[i].pose[2]));
+      tf::Transform transform(tf::Quaternion(rigid_.pose[4], rigid_.pose[5], rigid_.pose[6], rigid_.pose[3]), tf::Vector3(rigid_.pose[0], rigid_.pose[1], rigid_.pose[2]));
+      tf_broadcaster_.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "phasespace_world", std::string("rigid_body")));
+    }
+  }
+
+  if (acquire_camera_poses_) {
+    int num_cameras = owlGetCameras(cameras_, init_camera_count_);
+    if (owlGetError() != OWL_NO_ERROR) {
+      ROS_FATAL_STREAM("[PhaseSpace] Error while reading cameras' positions: " << owlGetError());
+      throw excp_;
+    }
+
+    if (num_cameras == 0) {
+      return;
+    }
+    
+    // publish camera poses
+    for (int i=0; i<num_cameras; i++) {
+      if (cameras_[i].cond > 0) {
+        tf::Transform transform(tf::Quaternion(cameras_[i].pose[4], cameras_[i].pose[5], cameras_[i].pose[6], cameras_[i].pose[3]), tf::Vector3(cameras_[i].pose[0], cameras_[i].pose[1], cameras_[i].pose[2]));
+        tf_broadcaster_.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "phasespace_world", std::string("phasespace_camera_") + boost::lexical_cast<std::string>(cameras_[i].id)));
+      }
+    }
+  }
 }
 
 void PhasespaceCore::updateNumLogFiles(int num_to_add) {

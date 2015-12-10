@@ -24,6 +24,8 @@
 // ROS libraries
 #include <ros/ros.h>
 #include <ros/time.h>
+#include <tf/transform_broadcaster.h>
+
 // Auto-generated from msg/ directory libraries
 #include "phasespace_acquisition/PhaseSpaceMarker.h"
 #include "phasespace_acquisition/PhaseSpaceMarkerArray.h"
@@ -148,6 +150,8 @@ class PhasespaceCore {
   ros::Publisher publisher_;
   ros::Subscriber subscriber_;
 
+  tf::TransformBroadcaster tf_broadcaster_;
+
   // PhaseSpace topic variables
   std::string topic_name_;
   int topic_queue_length_;
@@ -156,8 +160,11 @@ class PhasespaceCore {
   std::string server_ip_;
   int init_marker_count_;
   int init_flags_;
+  int init_camera_count_;
   int tracker_;
   OWLMarker *markers_;
+  OWLCamera *cameras_;
+  OWLRigid rigid_;
 
   // statistics variables
   ros::Time start_time_;
@@ -181,6 +188,8 @@ class PhasespaceCore {
   bool verbose_mode_;
   PhasespaceCoreException excp_;
 
+  bool acquire_camera_poses_;
+
 
   /*  Initializes the communication with the PhaseSpace server throught its API functions. It creates the point traker
    *  and all the active marker structures, based on the settings provided as ROS param (retrieved in the constructor)
@@ -193,6 +202,8 @@ class PhasespaceCore {
    *    + tracker_
    */
   void initializeCommunication();
+
+  void initializeRigidBodies(const std::vector<std::string>& filenames);
 
   /*  Retrieves data from the messages in the subscriber topic queue (when there are available) and fills the log
    *  files with it. Also, calls the 'printPhaseSpaceMarkerArray()' method if 'verbose_mode_' is true.
